@@ -28,6 +28,7 @@ int main(int argc, char *argv[]) {
                     }
                 }
             }
+            fclose(fh);
         }
         fwrite(&current_cnt, sizeof(current_cnt), 1, stdout);
         fwrite(&current_char, sizeof(current_char), 1, stdout);
