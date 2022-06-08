@@ -11,10 +11,13 @@ int reverse_block(FILE* fin, char* buf[], int* num_current_lines)
 {
     long current_memory_size = 0;
     size_t len = 0;
+    buf[*num_current_lines] = NULL;
     while (current_memory_size < MEM_MAX && getline(&buf[*num_current_lines], &len, fin) != -1) {
         current_memory_size += strlen(buf[*num_current_lines]);
         *num_current_lines += 1;
+        buf[*num_current_lines] = NULL;
     }
+    free(buf[*num_current_lines]);
     return current_memory_size < MEM_MAX;
 }
 
@@ -55,6 +58,7 @@ void free_buffer(char* buf[], int num_current_lines)
 {
     for (int i = 0; i < num_current_lines; i++)
         free(buf[i]);
+    free(buf);
 }
 
 char* getFileNameFromPath(char* path)
@@ -99,7 +103,7 @@ int main(int argc, char *argv[]) {
         }
     }
     int num_current_lines = 0;
-    char* buf[BLOCK_SIZE];
+    char** buf = malloc(BLOCK_SIZE * sizeof(char*));
     int done = 0;
     int num_temp_files = 0;
     do {
@@ -107,6 +111,7 @@ int main(int argc, char *argv[]) {
         if (!done)
         {
             write_temp_file(buf, num_current_lines, num_temp_files);
+            free_buffer(buf, num_current_lines);
             num_temp_files += 1;
             num_current_lines = 0;
         }
