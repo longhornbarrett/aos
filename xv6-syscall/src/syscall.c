@@ -5,6 +5,7 @@
 #include "mmu.h"
 #include "proc.h"
 #include "x86.h"
+#include "spinlock.h"
 #include "syscall.h"
 
 // User code makes a system call with INT T_SYSCALL.
@@ -82,6 +83,32 @@ argstr(int n, char **pp)
   return fetchstr(addr, pp);
 }
 
+struct {
+  struct spinlock lock;
+  int readcount;
+} my_readcount;
+
+void rcinit(void)
+{
+  initlock(&my_readcount.lock, "readcount");
+}
+
+int sys_getreadcount()
+{
+  acquire(&my_readcount.lock);
+  int rc = my_readcount.readcount; 
+  release(&my_readcount.lock);
+  return rc;
+}
+
+void increment_readcount()
+{
+  acquire(&my_readcount.lock);
+  my_readcount.readcount = my_readcount.readcount + 1;
+  release(&my_readcount.lock);
+}
+
+
 extern int sys_chdir(void);
 extern int sys_close(void);
 extern int sys_dup(void);
@@ -126,16 +153,20 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_getreadcount]  sys_getreadcount,
 };
+
 
 void
 syscall(void)
 {
   int num;
   struct proc *curproc = myproc();
-
   num = curproc->tf->eax;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+    if(num == SYS_read){
+      increment_readcount();
+    }
     curproc->tf->eax = syscalls[num]();
   } else {
     cprintf("%d %s: unknown sys call %d\n",
