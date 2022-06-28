@@ -14,6 +14,7 @@
 #define CONCURRENT_CMDS 128
 
 int path_len = 2;
+const char* command_delims = " \t\r\n\f\v"; 
 
 void print_error(void)
 {
@@ -134,11 +135,11 @@ char** parse_command(char* command, char** paths){
     char *argument;
     int argument_pos = 1;
     int num_cmds = 1;
-    cmd[0] = strsep(&command, " ");
+    cmd[0] = strtok_r(command, command_delims, &command);
     concurrent_cmds[num_cmds-1] = (char**)&cmd[0];
     bool redirect = false;
     char *redirect_fh = NULL;
-    while((argument = strsep(&command, " ")) != NULL)
+    while((argument = strtok_r(command, command_delims, &command)) != NULL)
     {
         if(strcmp(argument, "&") == 0)
         {
