@@ -141,6 +141,7 @@ char** parse_command(char* command, char** paths){
         launch_commands(concurrent_cmds, paths, num_cmds);
     }
     free(cmd);
+    free(concurrent_cmds);
     return paths;
 }
 
@@ -167,12 +168,9 @@ void wish_loop(FILE* fp, bool batch_mode){
         paths = parse_command(line, paths);
     }while(exit_status == 1);
     free(line);
+    free_buffer(paths, path_len);
 }
 
-void ex(char* cmd)
-{
-    printf("%s", cmd);
-}
 
 int main(int argc, char *argv[]) {
     if (argc == 2) {
