@@ -12,11 +12,17 @@
 #define COMMAND_BUFSIZE 204
 #define COMMAND_LINE_ARGUMENTS 128
 #define CONCURRENT_CMDS 128
+#define NO_EXIT 1
 
 int path_len = 2;
 const char* command_delims = " \t\r\n\f\v"; 
 char concurrent_char = '&';
 char redirect_char = '>';
+
+struct PathRet{
+    char** path;
+    int ret_code;
+};
 
 void print_error(void)
 {
@@ -24,19 +30,20 @@ void print_error(void)
     fprintf(stderr, error_message, strlen(error_message));
 }
 
-void wish_cd(char** cmd){
+int wish_cd(char** cmd){
     if (cmd[1] == NULL) {
         print_error();
-        exit(EXIT_SUCCESS);
+        return EXIT_SUCCESS;
     } else if(cmd[2] != NULL){
         print_error();
-        exit(EXIT_SUCCESS);
+        return EXIT_SUCCESS;
     } else{
         if (chdir(cmd[1]) != 0) {
             print_error();
-            exit(EXIT_SUCCESS);
+            return EXIT_SUCCESS;
         }
     }
+    return NO_EXIT;
 }
 
 void free_buffer(char* buf[], int buf_len)
@@ -79,7 +86,7 @@ char** wish_path(char** new_paths, int arg_len){
     return paths;
 }
 
-void launch_command(char** cmd, char** paths)
+int launch_command(char** cmd, char** paths)
 {
     bool found = false;
     char* full_path;
@@ -97,29 +104,29 @@ void launch_command(char** cmd, char** paths)
     }
     if(!found){
         print_error();
-        exit(EXIT_SUCCESS);
+        return EXIT_SUCCESS;
     }
     if (execv(full_path, cmd) == -1) {
         print_error();
         free(full_path);
-        exit(EXIT_SUCCESS);
+        return EXIT_SUCCESS;
     }
     free(full_path);
+    return NO_EXIT;
 }
 
-void launch_commands(char*** cmds, char** paths, int num_cmds)
+int launch_commands(char*** cmds, char** paths, int num_cmds)
 {
     pid_t *pids = malloc(num_cmds * sizeof(pid_t));
     for(int i = 0;i < num_cmds; i++){
         pid_t pid = fork();
         if (pid == 0) {
             // Child process
-            launch_command((char**)cmds[i], paths);
-            exit(0);
+            return launch_command((char**)cmds[i], paths);
         } else if (pid < 0) {
             // Error forking
             print_error();
-            exit(EXIT_SUCCESS);
+            return EXIT_SUCCESS;
         } else {
             pids[i] = pid;
         }
@@ -129,19 +136,25 @@ void launch_commands(char*** cmds, char** paths, int num_cmds)
             waitpid(pids[i], &status, 0);
     }
     free(pids);
+    return NO_EXIT;
 }
 
-char** parse_command(char* command, char** paths){
+struct PathRet parse_command(char* command, char** paths){
     char **cmd = malloc(COMMAND_LINE_ARGUMENTS * sizeof(char*));
     char ***concurrent_cmds = malloc(CONCURRENT_CMDS * sizeof(char**));
     char *argument;
     int argument_pos = 1;
     int num_cmds = 1;
-    cmd[0] = strtok_r(command, command_delims, &command);
-    concurrent_cmds[num_cmds-1] = (char**)&cmd[0];
     bool redirect = false;
     char *redirect_fh = NULL;
-    while((argument = strtok_r(command, command_delims, &command)) != NULL)
+    struct PathRet ret_struct;
+    ret_struct.ret_code = NO_EXIT;
+    ret_struct.path = paths;
+
+    cmd[0] = strtok_r(command, command_delims, &command);
+    concurrent_cmds[num_cmds-1] = (char**)&cmd[0];
+
+    while((argument = strtok_r(command, command_delims, &command)) != NULL && ret_struct.ret_code == NO_EXIT)
     {
         if(strcmp(argument, "&") == 0)
         {
@@ -156,58 +169,69 @@ char** parse_command(char* command, char** paths){
             if(redirect)
             {
                 print_error();
-                exit(EXIT_SUCCESS);
+                ret_struct.ret_code = EXIT_SUCCESS;
+                //exit(EXIT_SUCCESS);
             }
             redirect = true;
         }else if(redirect){
             if(redirect_fh != NULL)
             {
                 print_error();
-                exit(EXIT_SUCCESS);
+                //exit(EXIT_SUCCESS);
+                ret_struct.ret_code = EXIT_SUCCESS;
+            }else{
+                redirect_fh = argument;
             }
-            redirect_fh = argument;
         }else{
             cmd[argument_pos] = argument;
             argument_pos++;
         }
     }
     cmd[argument_pos] = NULL;
-    if(redirect)
-    {
-        if(redirect_fh == NULL)
+    if(ret_struct.ret_code == NO_EXIT){
+        if(redirect)
         {
-            print_error();
-            exit(EXIT_SUCCESS);
+            if(redirect_fh == NULL)
+            {
+                print_error();
+                //exit(EXIT_SUCCESS);
+                ret_struct.ret_code = EXIT_SUCCESS;
+            }else{
+                int orig_stdout = dup(1);
+                int orig_stderr = dup(2);
+                int out = open(redirect_fh, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                dup2(out, STDOUT_FILENO);
+                dup2(out, STDERR_FILENO);
+                ret_struct.ret_code = launch_commands(concurrent_cmds, paths, num_cmds);
+                fflush(stdout);
+                fflush(stderr);
+                close(out);
+                dup2(orig_stdout, STDOUT_FILENO);
+                dup2(orig_stderr, STDERR_FILENO);
+            }
+        }else if (strcmp(cmd[0], "exit") == 0)
+        {
+            // check if exit called with argument
+            if(cmd[1] != NULL)
+            {
+                print_error();
+                ret_struct.ret_code = EXIT_SUCCESS;
+            }
+            //exit(EXIT_SUCCESS);
+        }else if(strcmp(cmd[0], "cd") == 0)
+        {
+            ret_struct.ret_code = wish_cd(cmd);
+        }else if(strcmp(cmd[0], "path") == 0){
+            free_buffer(paths, path_len);
+            paths = wish_path(&cmd[1], argument_pos - 1);
+            ret_struct.path = paths;
+        }else{
+            ret_struct.ret_code = launch_commands(concurrent_cmds, paths, num_cmds);
         }
-        int orig_stdout = dup(1);
-        int orig_stderr = dup(2);
-        int out = open(redirect_fh, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-        dup2(out, STDOUT_FILENO);
-        dup2(out, STDERR_FILENO);
-        launch_commands(concurrent_cmds, paths, num_cmds);
-        fflush(stdout);
-        fflush(stderr);
-        close(out);
-        dup2(orig_stdout, STDOUT_FILENO);
-        dup2(orig_stderr, STDERR_FILENO);
-    }else if (strcmp(cmd[0], "exit") == 0)
-    {
-        // check if exit called with argument
-        if(cmd[1] != NULL)
-            print_error();
-        exit(EXIT_SUCCESS);
-    }else if(strcmp(cmd[0], "cd") == 0)
-    {
-        wish_cd(cmd);
-    }else if(strcmp(cmd[0], "path") == 0){
-        free_buffer(paths, path_len);
-        paths = wish_path(&cmd[1], argument_pos - 1);
-    }else{
-        launch_commands(concurrent_cmds, paths, num_cmds);
     }
     free(cmd);
     free(concurrent_cmds);
-    return paths;
+    return ret_struct;
 }
 
 char * replace(
@@ -259,7 +283,7 @@ char * replace(
 void wish_loop(FILE* fp, bool batch_mode){
     char *line = NULL;
     size_t len = 0;
-    int exit_status = 1;
+    int exit_status = NO_EXIT;
     char** paths = malloc(2 * sizeof(char*));
     paths[0] = malloc(sizeof("/bin/") * sizeof(char));
     strcpy(paths[0], "/bin/");
@@ -272,17 +296,23 @@ void wish_loop(FILE* fp, bool batch_mode){
         if (lr == -1){
             if (!feof(fp)){
                 print_error();
-                exit(EXIT_SUCCESS);
+                //exit(EXIT_SUCCESS);
             }
             break;
         }
         line[strcspn(line, "\n")] = 0;
-        char* cleaned_concurrent = replace(line, "&", " & ");
-        free(line);
-        line = replace(cleaned_concurrent, ">", " > ");
         if(check_for_actual_command(line))
-            paths = parse_command(line, paths);
-    }while(exit_status == 1);
+        {
+            char* cleaned_concurrent = replace(line, "&", " & ");
+            free(line);
+            line = replace(cleaned_concurrent, ">", " > ");
+            free(cleaned_concurrent);
+            struct PathRet ret_struct = parse_command(line, paths);
+            paths = ret_struct.path;
+            exit_status = ret_struct.ret_code;
+
+        }
+    }while(exit_status == NO_EXIT);
     free(line);
     free_buffer(paths, path_len);
 }
