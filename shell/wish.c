@@ -88,6 +88,8 @@ char** wish_path(char** new_paths, int arg_len){
 
 int launch_command(char** cmd, char** paths)
 {
+    if(!check_for_actual_command(cmd[0]))
+        return NO_EXIT;
     bool found = false;
     char* full_path;
     for(int j = 0; j < path_len && !found; j++)
@@ -106,7 +108,43 @@ int launch_command(char** cmd, char** paths)
         print_error();
         return EXIT_SUCCESS;
     }
-    if (execv(full_path, cmd) == -1) {
+
+    bool redirect = false;
+    char* redirect_fh = NULL;
+    for(int i = 0; cmd[i] != NULL; i++)
+    {
+        if(strcmp(cmd[i], ">") == 0)
+        {
+            if(redirect || cmd[i+1] == NULL || cmd[i+2] != NULL)
+            {
+                print_error();
+                free(full_path);
+                return EXIT_SUCCESS;
+            }
+            redirect = true;
+            redirect_fh = cmd[i+1];
+            cmd[i] = NULL;
+        }
+    }
+    if(redirect)
+    {
+        int orig_stdout = dup(1);
+        int orig_stderr = dup(2);
+        int out = open(redirect_fh, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        dup2(out, STDOUT_FILENO);
+        dup2(out, STDERR_FILENO);
+        int ret_code = execv(full_path, cmd);
+        fflush(stdout);
+        fflush(stderr);
+        close(out);
+        dup2(orig_stdout, STDOUT_FILENO);
+        dup2(orig_stderr, STDERR_FILENO);
+        if(ret_code == -1){
+            print_error();
+            free(full_path);
+            return EXIT_SUCCESS;
+        }
+    }else if (execv(full_path, cmd) == -1) {
         print_error();
         free(full_path);
         return EXIT_SUCCESS;
@@ -143,81 +181,44 @@ struct PathRet parse_command(char* command, char** paths){
     char **cmd = malloc(COMMAND_LINE_ARGUMENTS * sizeof(char*));
     char ***concurrent_cmds = malloc(CONCURRENT_CMDS * sizeof(char**));
     char *argument;
-    int argument_pos = 1;
+    int argument_pos = 0;
     int num_cmds = 1;
-    bool redirect = false;
-    char *redirect_fh = NULL;
+    bool a_command = false;
     struct PathRet ret_struct;
     ret_struct.ret_code = NO_EXIT;
     ret_struct.path = paths;
 
-    cmd[0] = strtok_r(command, command_delims, &command);
     concurrent_cmds[num_cmds-1] = (char**)&cmd[0];
 
     while((argument = strtok_r(command, command_delims, &command)) != NULL && ret_struct.ret_code == NO_EXIT)
     {
         if(strcmp(argument, "&") == 0)
         {
-            //Handle parallel commands
-            cmd[argument_pos] = NULL;
-            argument_pos++;
-            concurrent_cmds[num_cmds] = (char**)&cmd[argument_pos];
-            num_cmds++;
-        }else if(strcmp(argument, ">") == 0 )
-        {
-            //check if redirect already found if so this is an error
-            if(redirect)
-            {
-                print_error();
-                ret_struct.ret_code = EXIT_SUCCESS;
-                //exit(EXIT_SUCCESS);
-            }
-            redirect = true;
-        }else if(redirect){
-            if(redirect_fh != NULL)
-            {
-                print_error();
-                //exit(EXIT_SUCCESS);
-                ret_struct.ret_code = EXIT_SUCCESS;
-            }else{
-                redirect_fh = argument;
+            if(a_command){
+                //Handle parallel commands
+                cmd[argument_pos] = NULL;
+                argument_pos++;
+                concurrent_cmds[num_cmds] = (char**)&cmd[argument_pos];
+                num_cmds++;
+                a_command = false;
             }
         }else{
+            //at_least_one_command = true;
             cmd[argument_pos] = argument;
             argument_pos++;
+            a_command = true;
         }
     }
     cmd[argument_pos] = NULL;
-    if(ret_struct.ret_code == NO_EXIT){
-        if(redirect)
-        {
-            if(redirect_fh == NULL)
-            {
-                print_error();
-                //exit(EXIT_SUCCESS);
-                ret_struct.ret_code = EXIT_SUCCESS;
-            }else{
-                int orig_stdout = dup(1);
-                int orig_stderr = dup(2);
-                int out = open(redirect_fh, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-                dup2(out, STDOUT_FILENO);
-                dup2(out, STDERR_FILENO);
-                ret_struct.ret_code = launch_commands(concurrent_cmds, paths, num_cmds);
-                fflush(stdout);
-                fflush(stderr);
-                close(out);
-                dup2(orig_stdout, STDOUT_FILENO);
-                dup2(orig_stderr, STDERR_FILENO);
-            }
-        }else if (strcmp(cmd[0], "exit") == 0)
+    if(ret_struct.ret_code == NO_EXIT && cmd[0] != NULL){
+        if (strcmp(cmd[0], "exit") == 0)
         {
             // check if exit called with argument
             if(cmd[1] != NULL)
             {
-                print_error();
-                ret_struct.ret_code = EXIT_SUCCESS;
+                print_error();               
             }
-            //exit(EXIT_SUCCESS);
+            ret_struct.ret_code = EXIT_SUCCESS;
         }else if(strcmp(cmd[0], "cd") == 0)
         {
             ret_struct.ret_code = wish_cd(cmd);
@@ -295,9 +296,9 @@ void wish_loop(FILE* fp, bool batch_mode){
         int lr = getline(&line, &len, fp);
         if (lr == -1){
             if (!feof(fp)){
-                print_error();
-                //exit(EXIT_SUCCESS);
+                print_error();              
             }
+            free(line);
             break;
         }
         line[strcspn(line, "\n")] = 0;
@@ -310,10 +311,10 @@ void wish_loop(FILE* fp, bool batch_mode){
             struct PathRet ret_struct = parse_command(line, paths);
             paths = ret_struct.path;
             exit_status = ret_struct.ret_code;
-
         }
+        free(line);
+        line = NULL;
     }while(exit_status == NO_EXIT);
-    free(line);
     free_buffer(paths, path_len);
 }
 
