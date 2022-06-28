@@ -1,5 +1,7 @@
 #include <ctype.h>
+#include <fcntl.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -135,7 +137,7 @@ char** parse_command(char* command, char** paths){
     cmd[0] = strsep(&command, " ");
     concurrent_cmds[num_cmds-1] = (char**)&cmd[0];
     bool redirect = false;
-    char *redirect_fh;
+    char *redirect_fh = NULL;
     while((argument = strsep(&command, " ")) != NULL)
     {
         if(strcmp(argument, "&") == 0)
@@ -155,15 +157,37 @@ char** parse_command(char* command, char** paths){
             }
             redirect = true;
         }else if(redirect){
+            if(redirect_fh != NULL)
+            {
+                print_error();
+                exit(EXIT_SUCCESS);
+            }
             redirect_fh = argument;
-            printf("Redirecting to %s\n", redirect_fh);
         }else{
             cmd[argument_pos] = argument;
             argument_pos++;
         }
     }
     cmd[argument_pos] = NULL;
-    if (strcmp(cmd[0], "exit") == 0)
+    if(redirect)
+    {
+        if(redirect_fh == NULL)
+        {
+            print_error();
+            exit(EXIT_SUCCESS);
+        }
+        int orig_stdout = dup(1);
+        int orig_stderr = dup(2);
+        int out = open(redirect_fh, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        dup2(out, STDOUT_FILENO);
+        dup2(out, STDERR_FILENO);
+        launch_commands(concurrent_cmds, paths, num_cmds);
+        fflush(stdout);
+        fflush(stderr);
+        close(out);
+        dup2(orig_stdout, STDOUT_FILENO);
+        dup2(orig_stderr, STDERR_FILENO);
+    }else if (strcmp(cmd[0], "exit") == 0)
     {
         // check if exit called with argument
         if(cmd[1] != NULL)
