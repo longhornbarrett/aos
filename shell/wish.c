@@ -130,6 +130,9 @@ char** parse_command(char* command, char** paths){
     cmd[argument_pos] = NULL;
     if (strcmp(cmd[0], "exit") == 0)
     {
+        // check if exit called with argument
+        if(cmd[1] != NULL)
+            print_error();
         exit(EXIT_SUCCESS);
     }else if(strcmp(cmd[0], "cd") == 0)
     {
@@ -160,7 +163,7 @@ void wish_loop(FILE* fp, bool batch_mode){
         int lr = getline(&line, &len, fp);
         if (lr == -1){
             if (!feof(fp)){
-            print_error();
+                print_error();
             }
             break;
         }
