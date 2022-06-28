@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <stdbool.h>
@@ -21,11 +22,14 @@ void print_error(void)
 void wish_cd(char** cmd){
     if (cmd[1] == NULL) {
         print_error();
+        exit(EXIT_SUCCESS);
     } else if(cmd[2] != NULL){
         print_error();
+        exit(EXIT_SUCCESS);
     } else{
         if (chdir(cmd[1]) != 0) {
             print_error();
+            exit(EXIT_SUCCESS);
         }
     }
 }
@@ -35,6 +39,20 @@ void free_buffer(char* buf[], int buf_len)
     for (int i = 0; i < buf_len; i++)
         free(buf[i]);
     free(buf);
+}
+
+bool check_for_actual_command(char *buffer)
+{
+    bool command_found = false;
+    for (int i = 0; i < strlen(buffer); i++)
+    {
+        if (!isspace(buffer[i]))
+        {
+            command_found = true;
+            break;
+        }
+    }
+    return command_found;
 }
 
 char** wish_path(char** new_paths, int arg_len){
@@ -77,7 +95,9 @@ void launch_command(char** cmd, char** paths)
         exit(EXIT_SUCCESS);
     }
     if (execv(full_path, cmd) == -1) {
-        perror("wish");
+        print_error();
+        free(full_path);
+        exit(EXIT_SUCCESS);
     }
     free(full_path);
 }
@@ -94,6 +114,7 @@ void launch_commands(char*** cmds, char** paths, int num_cmds)
         } else if (pid < 0) {
             // Error forking
             print_error();
+            exit(EXIT_SUCCESS);
         } else {
             pids[i] = pid;
         }
@@ -113,6 +134,8 @@ char** parse_command(char* command, char** paths){
     int num_cmds = 1;
     cmd[0] = strsep(&command, " ");
     concurrent_cmds[num_cmds-1] = (char**)&cmd[0];
+    bool redirect = false;
+    char *redirect_fh;
     while((argument = strsep(&command, " ")) != NULL)
     {
         if(strcmp(argument, "&") == 0)
@@ -122,6 +145,18 @@ char** parse_command(char* command, char** paths){
             argument_pos++;
             concurrent_cmds[num_cmds] = (char**)&cmd[argument_pos];
             num_cmds++;
+        }else if(strcmp(argument, ">") == 0 )
+        {
+            //check if redirect already found if so this is an error
+            if(redirect)
+            {
+                print_error();
+                exit(EXIT_SUCCESS);
+            }
+            redirect = true;
+        }else if(redirect){
+            redirect_fh = argument;
+            printf("Redirecting to %s\n", redirect_fh);
         }else{
             cmd[argument_pos] = argument;
             argument_pos++;
@@ -164,11 +199,13 @@ void wish_loop(FILE* fp, bool batch_mode){
         if (lr == -1){
             if (!feof(fp)){
                 print_error();
+                exit(EXIT_SUCCESS);
             }
             break;
         }
         line[strcspn(line, "\n")] = 0;
-        paths = parse_command(line, paths);
+        if(check_for_actual_command(line))
+            paths = parse_command(line, paths);
     }while(exit_status == 1);
     free(line);
     free_buffer(paths, path_len);
