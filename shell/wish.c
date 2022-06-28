@@ -15,6 +15,8 @@
 
 int path_len = 2;
 const char* command_delims = " \t\r\n\f\v"; 
+char concurrent_char = '&';
+char redirect_char = '>';
 
 void print_error(void)
 {
@@ -208,6 +210,52 @@ char** parse_command(char* command, char** paths){
     return paths;
 }
 
+char * replace(
+    char const * const original, 
+    char const * const pattern, 
+    char const * const replacement
+) {
+  size_t const replen = strlen(replacement);
+  size_t const patlen = strlen(pattern);
+  size_t const orilen = strlen(original);
+
+  size_t patcnt = 0;
+  const char * oriptr;
+  const char * patloc;
+
+  // find how many times the pattern occurs in the original string
+  for (oriptr = original; (patloc = strstr(oriptr, pattern)); oriptr = patloc + patlen)
+  {
+    patcnt++;
+  }
+
+  {
+    // allocate memory for the new string
+    size_t const retlen = orilen + patcnt * (replen - patlen);
+    char * const returned = (char *) malloc( sizeof(char) * (retlen + 1) );
+
+    if (returned != NULL)
+    {
+      // copy the original string, 
+      // replacing all the instances of the pattern
+      char * retptr = returned;
+      for (oriptr = original; (patloc = strstr(oriptr, pattern)); oriptr = patloc + patlen)
+      {
+        size_t const skplen = patloc - oriptr;
+        // copy the section until the occurence of the pattern
+        strncpy(retptr, oriptr, skplen);
+        retptr += skplen;
+        // copy the replacement 
+        strncpy(retptr, replacement, replen);
+        retptr += replen;
+      }
+      // copy the rest of the string.
+      strcpy(retptr, oriptr);
+    }
+    return returned;
+  }
+}
+
 void wish_loop(FILE* fp, bool batch_mode){
     char *line = NULL;
     size_t len = 0;
@@ -229,6 +277,9 @@ void wish_loop(FILE* fp, bool batch_mode){
             break;
         }
         line[strcspn(line, "\n")] = 0;
+        char* cleaned_concurrent = replace(line, "&", " & ");
+        free(line);
+        line = replace(cleaned_concurrent, ">", " > ");
         if(check_for_actual_command(line))
             paths = parse_command(line, paths);
     }while(exit_status == 1);
@@ -242,10 +293,14 @@ int main(int argc, char *argv[]) {
         FILE* fp = fopen(argv[1], "r");
         if (fp == NULL) {
             print_error();
+            return EXIT_FAILURE;
         }else{
             wish_loop(fp, true);
             fclose(fp);
         }
+    }else if (argc > 2){
+        print_error();
+        return(EXIT_FAILURE);
     }else{
         wish_loop(stdin, false);
     }
