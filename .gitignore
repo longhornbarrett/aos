@@ -16,3 +16,4 @@ parport.out
 fmt
 tests-out/
 .idea/
+.vscode/
