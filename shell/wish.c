@@ -19,6 +19,7 @@ const char* command_delims = " \t\r\n\f\v";
 char concurrent_char = '&';
 char redirect_char = '>';
 
+//This is my struct that returns a path from this function
 struct PathRet{
     char** path;
     int ret_code;
@@ -30,6 +31,7 @@ void print_error(void)
     fprintf(stderr, error_message, strlen(error_message));
 }
 
+// method that changes directory
 int wish_cd(char** cmd){
     if (cmd[1] == NULL) {
         print_error();
@@ -46,6 +48,7 @@ int wish_cd(char** cmd){
     return NO_EXIT;
 }
 
+//This is a method that frees a memory buffer
 void free_buffer(char* buf[], int buf_len)
 {
     for (int i = 0; i < buf_len; i++)
