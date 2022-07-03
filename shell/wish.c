@@ -19,7 +19,7 @@ const char* command_delims = " \t\r\n\f\v";
 char concurrent_char = '&';
 char redirect_char = '>';
 
-//This is my struct that returns a path
+//This is my struct that returns a path from this function
 struct PathRet{
     char** path;
     int ret_code;
