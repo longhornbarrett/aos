@@ -31,6 +31,7 @@ void print_error(void)
     fprintf(stderr, error_message, strlen(error_message));
 }
 
+// method that changes directory
 int wish_cd(char** cmd){
     if (cmd[1] == NULL) {
         print_error();
