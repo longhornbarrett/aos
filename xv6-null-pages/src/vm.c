@@ -7,7 +7,7 @@
 #include "proc.h"
 #include "elf.h"
 
-#define MEM_PROT_MASK 0xfffffff9
+#define MEM_PROT_MASK 0xfffffffD
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
@@ -403,17 +403,11 @@ memoryprotect(void *addr, int len, int prot, struct proc *curproc)
     pte = walkpgdir(curproc->pgdir,(void *)curr ,0);
     if(pte == 0)
       return -1;
-    //clear last 3 bits
+    //clear writable bit
     *pte &= MEM_PROT_MASK;
     switch(prot) {
-      case PROT_NONE:
-        *pte |= PTE_P;
-        break;
-      case PROT_READ:
-        *pte |= (PTE_P | PTE_U);
-        break;
       case PROT_WRITE:
-        *pte |= (PTE_P | PTE_U | PTE_W);
+        *pte |= PTE_W;
         break;
     }
     curr += PGSIZE;
