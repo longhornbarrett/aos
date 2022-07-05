@@ -7,8 +7,11 @@
 #include "proc.h"
 #include "elf.h"
 
+#define MEM_PROT_MASK 0xfffffffD
+
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
+
 
 // Set up CPU's kernel segment descriptors.
 // Run once on entry on each CPU.
@@ -322,7 +325,7 @@ copyuvm(pde_t *pgdir, uint sz)
 
   if((d = setupkvm()) == 0)
     return 0;
-  for(i = 0; i < sz; i += PGSIZE){
+  for(i = PGSIZE; i < sz; i += PGSIZE){
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
     if(!(*pte & PTE_P))
@@ -386,9 +389,30 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 }
 
 //PAGEBREAK!
-// Blank page.
-//PAGEBREAK!
-// Blank page.
-//PAGEBREAK!
-// Blank page.
+int
+memoryprotect(void *addr, int len, int prot, struct proc *curproc)
+{
+  if((uint)addr % PGSIZE != 0 || len <= 0)
+    return -1;
+  pte_t *pte;
+  uint base_addr = PGROUNDDOWN((uint)addr);
+  uint max_addr = base_addr + (len * PGSIZE);
+  uint curr = base_addr;
+  do {
 
+    pte = walkpgdir(curproc->pgdir,(void *)curr ,0);
+    if(pte == 0)
+      return -1;
+    //clear writable bit
+    *pte &= MEM_PROT_MASK;
+    switch(prot) {
+      case PROT_WRITE:
+        *pte |= PTE_W;
+        break;
+    }
+    curr += PGSIZE;
+  } while(curr < max_addr);
+
+  lcr3(V2P(curproc->pgdir));
+  return 0; ///what happens after returned?
+}
