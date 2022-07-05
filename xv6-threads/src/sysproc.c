@@ -42,6 +42,30 @@ sys_getpid(void)
   return myproc()->pid;
 }
 
+int sys_clone(void)
+{
+  char* fcn;
+  char* arg1;
+  char* arg2;
+  cprintf("Sys Cloning getting args\n");
+  //char* stack;
+  if(argptr(0, &fcn, sizeof(char*)) <0)
+    return -1;
+  if(argptr(1,&arg1, sizeof(char*)) <0)
+    return -1;
+  if(argptr(2,&arg2, sizeof(char*)) <0)
+    return -1;
+  cprintf("Sys Cloning\n");
+  return 0;
+}
+
+int sys_join(void)
+{
+  //void* stack;
+  cprintf("Sys Joining\n");
+  return 0;
+}
+
 
 int sys_mprotect(void)
 {  

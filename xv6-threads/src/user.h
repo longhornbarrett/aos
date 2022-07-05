@@ -25,6 +25,8 @@ int sleep(int);
 int uptime(void);
 int mprotect(void *addr, int len);
 int munprotect(void *addr, int len);
+int clone(void(*fcn)(void*, void *), void *arg1, void *arg2);
+int join();
 
 // ulib.c
 int stat(const char*, struct stat*);
@@ -39,3 +41,5 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2);
+int thread_join();

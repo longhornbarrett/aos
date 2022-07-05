@@ -4,6 +4,23 @@
 #include "user.h"
 #include "x86.h"
 
+
+int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
+{
+  printf(1, "User Cloning\n");
+  //void* stack;
+  clone(start_routine, arg1, arg2);
+  return 0;
+}
+
+int thread_join()
+{
+  printf(1, "User Joining\n");
+  //void** stack;
+  join();
+  return 0;
+}
+
 char*
 strcpy(char *s, const char *t)
 {
