@@ -13,6 +13,7 @@
 // library system call function. The saved user %esp points
 // to a saved program counter, and then the first argument.
 
+
 // Fetch the int at addr from the current process.
 int
 fetchint(uint addr, int *ip)
@@ -92,6 +93,8 @@ extern int sys_fstat(void);
 extern int sys_getpid(void);
 extern int sys_kill(void);
 extern int sys_link(void);
+extern int sys_mprotect(void);
+extern int sys_munprotect(void);
 extern int sys_mkdir(void);
 extern int sys_mknod(void);
 extern int sys_open(void);
@@ -126,6 +129,8 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_munprotect] sys_munprotect,
+[SYS_mprotect] sys_mprotect,
 };
 
 void
