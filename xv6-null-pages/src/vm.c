@@ -7,8 +7,11 @@
 #include "proc.h"
 #include "elf.h"
 
+#define MEM_PROT_MASK 0xfffffff9
+
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
+
 
 // Set up CPU's kernel segment descriptors.
 // Run once on entry on each CPU.
@@ -386,9 +389,36 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 }
 
 //PAGEBREAK!
-// Blank page.
-//PAGEBREAK!
-// Blank page.
-//PAGEBREAK!
-// Blank page.
+int
+memoryprotect(void *addr, int len, int prot, struct proc *curproc)
+{
+  if((uint)addr % PGSIZE != 0 || len <= 0)
+    return -1;
+  pte_t *pte;
+  uint base_addr = PGROUNDDOWN((uint)addr);
+  uint max_addr = base_addr + (len * PGSIZE);
+  uint curr = base_addr;
+  do {
 
+    pte = walkpgdir(curproc->pgdir,(void *)curr ,0);
+    if(pte == 0)
+      return -1;
+    //clear last 3 bits
+    *pte &= MEM_PROT_MASK;
+    switch(prot) {
+      case PROT_NONE:
+        *pte |= PTE_P;
+        break;
+      case PROT_READ:
+        *pte |= (PTE_P | PTE_U);
+        break;
+      case PROT_WRITE:
+        *pte |= (PTE_P | PTE_U | PTE_W);
+        break;
+    }
+    curr += PGSIZE;
+  } while(curr < max_addr);
+
+  lcr3(V2P(curproc->pgdir));
+  return 0; ///what happens after returned?
+}

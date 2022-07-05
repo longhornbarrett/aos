@@ -43,14 +43,28 @@ sys_getpid(void)
 }
 
 
-int sys_mprotect(void *addr, int len)
-{
-  return 0;
+int sys_mprotect(void)
+{  
+  int addr,len;
+
+  if(argint(0, &addr) <0)
+    return -1;
+  if(argint(1,&len) <0)
+    return -1;
+
+  return memoryprotect((void*)addr,len, PROT_READ, myproc());
 }
 
-int sys_munprotect(void *addr, int len)
+int sys_munprotect(void)
 {
-  return 0;
+  int addr,len;
+
+  if(argint(0, &addr) <0)
+    return -1;
+  if(argint(1,&len) <0)
+    return -1;
+
+  return memoryprotect((void*)addr,len, PROT_WRITE, myproc());
 }
 
 int
