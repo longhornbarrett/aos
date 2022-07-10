@@ -1,5 +1,10 @@
 struct stat;
 struct rtcdate;
+typedef struct __lock_t{
+    int ticket;
+    int turn;
+}lock_t;
+lock_t thread_lock;
 
 // system calls
 int fork(void);
@@ -43,3 +48,6 @@ void free(void*);
 int atoi(const char*);
 int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2);
 int thread_join();
+void lock_acquire(lock_t*);
+void lock_release(lock_t*);
+void lock_init(lock_t*);

@@ -5,6 +5,47 @@
 #include "user.h"
 #include "x86.h"
 
+
+static inline int fetch_and_add(int* variable, int value)
+{
+    __asm__ volatile("lock; xaddl %0, %1"
+      : "+r" (value), "+m" (*variable) // input + output
+      : // No input-only
+      : "memory"
+    );
+    return value;
+}
+
+
+int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
+{
+  void* stack = malloc(PGSIZE);
+  return clone(start_routine, arg1, arg2, stack);
+}
+
+int thread_join()
+{
+  void* stack;
+  return join(&stack);
+}
+
+void lock_acquire(lock_t* lock)
+{
+  int myturn = fetch_and_add(&lock->ticket, 1);
+  while(lock->turn != myturn);
+}
+
+void lock_release(lock_t* lock)
+{
+  lock->turn = lock->turn + 1;
+}
+
+void lock_init(lock_t* lock)
+{
+  lock->ticket = 0;
+  lock->turn = 0;
+}
+
 char*
 strcpy(char *s, const char *t)
 {
@@ -104,17 +145,4 @@ memmove(void *vdst, const void *vsrc, int n)
   while(n-- > 0)
     *dst++ = *src++;
   return vdst;
-}
-
-int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
-{
-  void* stack;
-  stack = malloc(PGSIZE);
-  return clone(start_routine, arg1, arg2, stack);
-}
-
-int thread_join()
-{
-  void* stack;
-  return join(&stack);
 }

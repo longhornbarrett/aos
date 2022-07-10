@@ -535,11 +535,68 @@ procdump(void)
 
 int clone(void(*fcn)(void*, void *), void *arg1, void *arg2, void *stack)
 { 
-  return 0;
+  struct proc *thread_p;
+  struct proc *curr_p = myproc();
+
+  // Allocate process.
+  if((thread_p = allocproc()) == 0)
+    return -1;
+
+  // Set threads state to that of parent process
+  thread_p->pgdir = curr_p->pgdir;
+  thread_p->parent = curr_p;
+  thread_p->sz = curr_p->sz;
+  *thread_p->tf = *curr_p->tf;
+
+  // Save address of user malloc'ed stack
+  thread_p->tstack = stack;
+  
+  void * sarg1, *sarg2, *sret;
+
+  // Push fake return address to the stack of thread
+  sret = stack + PGSIZE - 3 * sizeof(void *);
+  *(uint*)sret = 0xFFFFFFF;
+
+  // Push first argument to the stack of thread
+  sarg1 = stack + PGSIZE - 2 * sizeof(void *);
+  *(uint*)sarg1 = (uint)arg1;
+
+  // Push second argument to the stack of thread
+  sarg2 = stack + PGSIZE - 1 * sizeof(void *);
+  *(uint*)sarg2 = (uint)arg2;
+
+  // Put address of new stack in the stack pointer (ESP)
+  thread_p->tf->esp = (uint) stack;
+
+  // Initialize stack pointer to appropriate address
+  thread_p->tf->esp += PGSIZE - 3 * sizeof(void*);
+  thread_p->tf->ebp = thread_p->tf->esp;
+
+  // Set instruction pointer
+  thread_p->tf->eip = (uint) fcn;
+
+  // Clear %eax so that fork returns 0 in the child.
+  // From fork not sure if needed
+  thread_p->tf->eax = 0;
+
+  int i;
+  for(i = 0; i < NOFILE; i++)
+    if(curr_p->ofile[i])
+      thread_p->ofile[i] = filedup(curr_p->ofile[i]);
+  thread_p->cwd = idup(curr_p->cwd);
+
+  safestrcpy(thread_p->name, curr_p->name, sizeof(curr_p->name));
+ 
+  acquire(&ptable.lock);
+
+  thread_p->state = RUNNABLE;
+
+  release(&ptable.lock);
+
+  return thread_p->pid;
 }
 
-int
-join(void** stack)
+int join(void** stack)
 {
   return 0;
 }
