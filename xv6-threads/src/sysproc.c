@@ -44,26 +44,27 @@ sys_getpid(void)
 
 int sys_clone(void)
 {
-  char* fcn;
-  char* arg1;
-  char* arg2;
-  cprintf("Sys Cloning getting args\n");
-  //char* stack;
-  if(argptr(0, &fcn, sizeof(char*)) <0)
+  int fcn;
+  int arg1;
+  int arg2;
+  int stack;
+  if(argint(0, &fcn) <0)
     return -1;
-  if(argptr(1,&arg1, sizeof(char*)) <0)
+  if(argint(1, &arg1) <0)
     return -1;
-  if(argptr(2,&arg2, sizeof(char*)) <0)
+  if(argint(2, &arg2) <0)
     return -1;
-  cprintf("Sys Cloning\n");
-  return 0;
+  if(argint(3, &stack) <0)
+    return -1;
+  return clone((void*)fcn, (void*)arg1, (void*)arg2, (void*)stack);
 }
 
 int sys_join(void)
 {
-  //void* stack;
-  cprintf("Sys Joining\n");
-  return 0;
+  int stack;
+  if(argint(0, &stack) <0)
+    return -1;
+  return join((void**)stack);
 }
 
 

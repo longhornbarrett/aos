@@ -25,8 +25,8 @@ int sleep(int);
 int uptime(void);
 int mprotect(void *addr, int len);
 int munprotect(void *addr, int len);
-int clone(void(*fcn)(void*, void *), void *arg1, void *arg2);
-int join();
+int clone(void (*fcn)(void*, void *), void *, void *, void*);
+int join(void**);
 
 // ulib.c
 int stat(const char*, struct stat*);

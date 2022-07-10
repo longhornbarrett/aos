@@ -1,25 +1,9 @@
 #include "types.h"
 #include "stat.h"
 #include "fcntl.h"
+#include "mmu.h"
 #include "user.h"
 #include "x86.h"
-
-
-int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
-{
-  printf(1, "User Cloning\n");
-  //void* stack;
-  clone(start_routine, arg1, arg2);
-  return 0;
-}
-
-int thread_join()
-{
-  printf(1, "User Joining\n");
-  //void** stack;
-  join();
-  return 0;
-}
 
 char*
 strcpy(char *s, const char *t)
@@ -120,4 +104,17 @@ memmove(void *vdst, const void *vsrc, int n)
   while(n-- > 0)
     *dst++ = *src++;
   return vdst;
+}
+
+int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
+{
+  void* stack;
+  stack = malloc(PGSIZE);
+  return clone(start_routine, arg1, arg2, stack);
+}
+
+int thread_join()
+{
+  void* stack;
+  return join(&stack);
 }
