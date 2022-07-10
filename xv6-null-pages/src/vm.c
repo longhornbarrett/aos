@@ -395,11 +395,9 @@ memoryprotect(void *addr, int len, int prot, struct proc *curproc)
   if((uint)addr % PGSIZE != 0 || len <= 0)
     return -1;
   pte_t *pte;
-  uint base_addr = PGROUNDDOWN((uint)addr);
-  uint max_addr = base_addr + (len * PGSIZE);
-  uint curr = base_addr;
-  do {
-
+  uint max_addr = (uint)addr + (len * PGSIZE);
+  for(uint curr = (uint)addr; curr < max_addr; curr += PGSIZE)
+  {
     pte = walkpgdir(curproc->pgdir,(void *)curr ,0);
     if(pte == 0)
       return -1;
@@ -410,9 +408,7 @@ memoryprotect(void *addr, int len, int prot, struct proc *curproc)
         *pte |= PTE_W;
         break;
     }
-    curr += PGSIZE;
-  } while(curr < max_addr);
-
+  }
   lcr3(V2P(curproc->pgdir));
-  return 0; ///what happens after returned?
+  return 0; 
 }
