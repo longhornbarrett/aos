@@ -5,6 +5,24 @@
 #include "user.h"
 #include "x86.h"
 
+int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
+{
+  void* freeptr = malloc(PGSIZE*2);
+  void* stack;
+  if(freeptr == 0)
+    return -1;
+  if((uint)freeptr % PGSIZE == 0)
+    stack = freeptr;
+  else
+    stack = freeptr + (PGSIZE - ((uint)freeptr % PGSIZE));
+  return clone(start_routine, arg1, arg2, stack);
+}
+
+int thread_join()
+{
+  void* stack;
+  return join(&stack);
+}
 
 static inline int fetch_and_add(int* variable, int value)
 {
@@ -16,23 +34,13 @@ static inline int fetch_and_add(int* variable, int value)
     return value;
 }
 
-
-int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
-{
-  void* stack = malloc(PGSIZE);
-  return clone(start_routine, arg1, arg2, stack);
-}
-
-int thread_join()
-{
-  void* stack;
-  return join(&stack);
-}
-
 void lock_acquire(lock_t* lock)
 {
   int myturn = fetch_and_add(&lock->ticket, 1);
-  while(lock->turn != myturn);
+  while(lock->turn != myturn)
+  {
+    sleep(1);
+  }
 }
 
 void lock_release(lock_t* lock)

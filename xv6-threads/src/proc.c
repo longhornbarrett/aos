@@ -535,8 +535,16 @@ procdump(void)
 
 int clone(void(*fcn)(void*, void *), void *arg1, void *arg2, void *stack)
 { 
+
   struct proc *thread_p;
   struct proc *curr_p = myproc();
+
+      //checking stack pointer
+  if(((uint)stack % PGSIZE) != 0)
+    return -1;
+
+  if((curr_p->sz - (uint)stack) < PGSIZE)
+    return -1;
 
   // Allocate process.
   if((thread_p = allocproc()) == 0)
@@ -598,5 +606,49 @@ int clone(void(*fcn)(void*, void *), void *arg1, void *arg2, void *stack)
 
 int join(void** stack)
 {
-  return 0;
+  struct proc *p;
+  int havekids, pid;
+  struct proc *cp = myproc();
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for zombie children.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+
+      // Check if this is a child thread (parent or shared address space)
+      if(p->parent != cp || p->pgdir != p->parent->pgdir)
+        continue;
+        
+      havekids = 1;
+      if(p->state == ZOMBIE){
+        // Found one.
+        pid = p->pid;
+
+        // Remove thread from the kernel stack
+        kfree(p->kstack);
+        p->kstack = 0;
+
+        // Reset thread in process table
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+        stack = p->tstack;
+        p->tstack = 0;
+
+        release(&ptable.lock);
+        return pid;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || cp->killed){
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(cp, &ptable.lock);  //DOC: wait-sleep
+  }
 }
