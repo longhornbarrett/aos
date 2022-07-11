@@ -398,6 +398,8 @@ memoryprotect(void *addr, int len, int prot, struct proc *curproc)
   uint max_addr = (uint)addr + (len * PGSIZE);
   for(uint curr = (uint)addr; curr < max_addr; curr += PGSIZE)
   {
+    if(curr >= KERNBASE || curr < PGSIZE)
+      return -1;
     pte = walkpgdir(curproc->pgdir,(void *)curr ,0);
     if(pte == 0)
       return -1;
