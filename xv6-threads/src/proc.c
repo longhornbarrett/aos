@@ -544,6 +544,8 @@ int clone(void(*fcn)(void*, void *), void *arg1, void *arg2, void *stack)
     return -1;
   if((curr_p->sz - (uint)stack) < PGSIZE)
     return -1;
+  if((uint)fcn > curr_p->sz)
+    return -1;
 
   // Allocate process.
   if((thread_p = allocproc()) == 0)
