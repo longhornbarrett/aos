@@ -7,21 +7,30 @@
 
 int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
 {
-  void* freeptr = malloc(PGSIZE*2);
-  void* stack;
-  if(freeptr == 0)
+  const uint HEADER_SZ = sizeof(uint);
+  uint mem = (uint)malloc(PGSIZE*2 + HEADER_SZ);
+  if(mem == 0)
     return -1;
-  if((uint)freeptr % PGSIZE == 0)
-    stack = freeptr;
-  else
-    stack = freeptr + (PGSIZE - ((uint)freeptr % PGSIZE));
-  return clone(start_routine, arg1, arg2, stack);
+  uint stack_start = mem + HEADER_SZ;
+  uint stack = PGROUNDUP(stack_start);
+  uint *header = (uint *) (stack - HEADER_SZ);
+  *header = mem;
+  int rc = clone(start_routine, arg1, arg2, (void*)stack);
+  if (rc == -1)
+    free((void*)mem);
+  return rc;
 }
 
 int thread_join()
 {
   void* stack;
-  return join(&stack);
+  int rc = join(&stack);
+  if(rc < 0)
+    return rc;
+  uint *header = ((uint *) stack) - 1;
+  void *malloc_block_start = (void *) *header;
+  free(malloc_block_start);
+  return rc;
 }
 
 static inline int fetch_and_add(int* variable, int value)

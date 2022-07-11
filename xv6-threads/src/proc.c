@@ -538,11 +538,10 @@ int clone(void(*fcn)(void*, void *), void *arg1, void *arg2, void *stack)
 
   struct proc *thread_p;
   struct proc *curr_p = myproc();
-
+  //cprintf("stack ptr %d\n", (uint)stack);
       //checking stack pointer
   if(((uint)stack % PGSIZE) != 0)
     return -1;
-
   if((curr_p->sz - (uint)stack) < PGSIZE)
     return -1;
 
@@ -556,9 +555,6 @@ int clone(void(*fcn)(void*, void *), void *arg1, void *arg2, void *stack)
   thread_p->sz = curr_p->sz;
   *thread_p->tf = *curr_p->tf;
 
-  // Save address of user malloc'ed stack
-  thread_p->tstack = stack;
-  
   void * sarg1, *sarg2, *sret;
 
   // Push fake return address to the stack of thread
@@ -616,14 +612,14 @@ int join(void** stack)
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
 
       // Check if this is a child thread (parent or shared address space)
-      if(p->parent != cp || p->pgdir != p->parent->pgdir)
+      if(p->parent != cp || p->pgdir != cp->pgdir)
         continue;
         
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
         pid = p->pid;
-
+        *stack = (void *) PGROUNDDOWN(p->tf->esp);
         // Remove thread from the kernel stack
         kfree(p->kstack);
         p->kstack = 0;
@@ -634,8 +630,6 @@ int join(void** stack)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        stack = p->tstack;
-        p->tstack = 0;
 
         release(&ptable.lock);
         return pid;
