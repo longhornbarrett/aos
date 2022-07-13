@@ -394,6 +394,8 @@ memoryprotect(void *addr, int len, int prot, struct proc *curproc)
 {
   if((uint)addr % PGSIZE != 0 || len <= 0)
     return -1;
+  if((uint)addr + len*PGSIZE > curproc->sz)
+    return -1;
   pte_t *pte;
   uint max_addr = (uint)addr + (len * PGSIZE);
   for(uint curr = (uint)addr; curr < max_addr; curr += PGSIZE)
