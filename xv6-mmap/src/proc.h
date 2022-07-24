@@ -1,3 +1,16 @@
+enum mmap_region_type { ANONYMOUS, FILEBACKED };
+typedef struct mmapped_region 
+{ 
+  struct mmapped_region* next;
+  void* addr;                   //starting address for mapped region 
+  uint length;                  //length region
+  int offset;                   //offset
+  int fd;                       //file descriptor
+  int prot;                     //protection for region
+  enum mmap_region_type region_type; // region type
+} mmapped_region;
+
+
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
@@ -49,6 +62,8 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  int nmapped_regions;         // number of regions we have mmapped
+  mmapped_region *mmapped_header;// header of mapped regions
 };
 
 // Process memory is laid out contiguously, low addresses first:
