@@ -45,7 +45,6 @@ kmfree(void *addr)
 static KNode*
 kmorecore()
 {
-  char *p;
   KNode *hp;
   hp = (KNode*)kalloc();
   if(hp == 0)

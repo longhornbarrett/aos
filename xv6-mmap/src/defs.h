@@ -69,6 +69,10 @@ void            kfree(char*);
 void            kinit1(void*, void*);
 void            kinit2(void*, void*);
 
+// kmalloc.c
+void*           kmalloc(uint);
+void            kmfree(void*);
+
 // kbd.c
 void            kbdintr(void);
 
@@ -86,6 +90,11 @@ void            initlog(int dev);
 void            log_write(struct buf*);
 void            begin_op();
 void            end_op();
+
+// mmap.c
+void*           mmap(void *addr, uint length, int protection, int flags, int fd, int offset);
+int             munmap(void *addr, uint length);
+void            mmap_free(void);
 
 // mp.c
 extern int      ismp;

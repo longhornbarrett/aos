@@ -109,3 +109,40 @@ sys_kmfree(void)
   kmfree((void*)addr);
   return 0;
 }
+
+int
+sys_mmap(void)
+{
+  int addr;
+  int length;
+  int prot;
+  int flags;
+  int fd;
+  int offset;
+
+  if(argint(0, &addr) < 0 ||argint(1, &length) < 0 || argint(2, &prot) < 0)
+  {
+    return -1;
+  }
+  if(argint(3, &flags) < 0 || argint(4, &fd) < 0 || argint(5, &offset) < 0)
+  {
+    return -1;
+  }
+
+  return (int)mmap((void*)addr, (uint)length, (uint)prot, (uint)flags, (uint)fd, (uint)offset);
+}
+
+int
+sys_munmap(void)
+{
+  int addr;
+  int length;
+
+  if(argint(0, &addr) < 0 || argint(1, &length) < 0)
+  {
+    return -1;
+  }
+
+  return munmap((void*)addr, (uint)length);
+}
+
