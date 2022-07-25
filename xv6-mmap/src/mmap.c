@@ -12,7 +12,7 @@
 mmapped_region* create_header(uint pgaligned_addr, int length, int offset)
 {
   // Allocate using kmalloc to not waste memory
-    mmapped_region* region = (mmapped_region*)kmalloc(sizeof(mmapped_region*));
+    mmapped_region* region = (mmapped_region*)kmalloc(sizeof(mmapped_region));
     if (region == NULL){
       return (void*)-1;
     }
@@ -79,12 +79,38 @@ void mmap_free()
     curr = next;
   }
 }
-
+// Print all the memory mappings
+void print_maps() {
+  struct proc *p = myproc();
+  cprintf("Total regions: %d\n", p->nmapped_regions);
+  mmapped_region* curr = p->mmapped_header;
+  cprintf("==============Mapped regions==================\n");
+  while (curr) {
+    cprintf("Addr: %p\tLength: %d\tProt: %d\n",
+            curr->addr, curr->length,
+            curr->prot);
+    curr = curr->next;
+  }
+  cprintf("==================================================\n");
+}
+// Print all the memory mappings
+void print_umaps() {
+  struct proc *p = myproc();
+  cprintf("Total regions: %d\n", p->nmapped_regions);
+  mmapped_region* curr = p->unmapped_header;
+  cprintf("==============Unmapped regions==================\n");
+  while (curr) {
+    cprintf("Addr: %p\tLength: %d\tProt: %d\n",
+            curr->addr, curr->length,
+            curr->prot);
+    curr = curr->next;
+  }
+  cprintf("==================================================\n");
+}
 void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
 {
   if ((uint)addr >= KERNBASE || length <= 0)
     return (void*)-1;
-
   struct proc *p = myproc();
 
   if (!p->mmapped_header && !p->unmapped_header){
@@ -101,7 +127,7 @@ void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
     mmapped_region* curr = p->unmapped_header;
     mmapped_region* prev = NULL;
     int found_region = 0;
-    while (curr->next && !found_region){
+    while (curr && !found_region){
       if(addr == curr->addr && curr->length > length)
       {
         curr->length = length;
@@ -126,6 +152,7 @@ void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
         }
         p->mmapped_header = insert_into_mapped(p->mmapped_header, curr);
         addr = curr->addr;
+        found_region = 1;
       }
       prev = curr;
       curr = curr->next;
@@ -144,24 +171,11 @@ void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
     }
   }
   p->nmapped_regions++;
-
   return addr;
 }
-// Print all the memory mappings
-void print_maps() {
-  struct proc *p = myproc();
-  cprintf("Total regions: %d\n", p->nmapped_regions);
-  mmapped_region* curr = p->mmapped_header;
-  while (curr) {
-    cprintf("Addr: %p\tLength: %d\tProt: %d\n",
-            curr->addr, curr->length,
-            curr->prot);
-    curr = curr->next;
-  }
-}
+
 int munmap(void *addr, uint length)
 {
-  print_maps();
   struct proc *p = myproc();
   if (addr >= (void*)KERNBASE || length <= 0 || p->nmapped_regions == 0)
     return -1;
@@ -173,11 +187,15 @@ int munmap(void *addr, uint length)
   {
     if (curr->addr == addr && curr->length == length)
     {
+      curr->length = PGROUNDUP(curr->length);
       memset(addr, 0, curr->length);
       p->nmapped_regions--;
-      if(!prev)
+      if(!prev && !curr->next)
       {
-        p->unmapped_header = NULL;
+        p->mmapped_header = NULL;
+      }else if(!prev){
+        p->mmapped_header = curr->next;
+        curr->next = NULL;
       }else{
         prev->next = curr->next;
       }
