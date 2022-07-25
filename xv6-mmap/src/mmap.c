@@ -25,8 +25,9 @@ mmapped_region* create_header(uint pgaligned_addr, int length, int offset)
     return region;
 }
 
-mmapped_region* insert_into_mapped(mmapped_region* header, mmapped_region* region)
+mmapped_region* insert_into_list(mmapped_region* header, mmapped_region* region)
 {
+  //This function inserts into a linked list at the sorted location
   if(!header)
     header = region;
   else{
@@ -78,6 +79,13 @@ void mmap_free()
     del_mmapped_node(curr, 0);
     curr = next;
   }
+
+  curr = myproc()->unmapped_header;
+  while (curr){
+    next = curr->next;
+    del_mmapped_node(curr, 0);
+    curr = next;
+  }
 }
 // Print all the memory mappings
 void print_maps() {
@@ -93,6 +101,7 @@ void print_maps() {
   }
   cprintf("==================================================\n");
 }
+
 // Print all the memory mappings
 void print_umaps() {
   struct proc *p = myproc();
@@ -107,6 +116,7 @@ void print_umaps() {
   }
   cprintf("==================================================\n");
 }
+
 void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
 {
   if ((uint)addr >= KERNBASE || length <= 0)
@@ -150,7 +160,7 @@ void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
         else{
           prev->next = curr->next;
         }
-        p->mmapped_header = insert_into_mapped(p->mmapped_header, curr);
+        p->mmapped_header = insert_into_list(p->mmapped_header, curr);
         addr = curr->addr;
         found_region = 1;
       }
@@ -166,7 +176,7 @@ void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
         return (void*)-1;
       switchuvm(p);
       mmapped_region* new_region = create_header(pgaligned_addr, length, offset);
-      p->mmapped_header = insert_into_mapped(p->mmapped_header, new_region);
+      p->mmapped_header = insert_into_list(p->mmapped_header, new_region);
       addr = new_region->addr;
     }
   }
@@ -199,7 +209,7 @@ int munmap(void *addr, uint length)
       }else{
         prev->next = curr->next;
       }
-      p->unmapped_header = insert_into_mapped(p->unmapped_header, curr);
+      p->unmapped_header = insert_into_list(p->unmapped_header, curr);
       switchuvm(p);
       return 0;
     }
