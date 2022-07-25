@@ -64,6 +64,7 @@ struct proc {
   char name[16];               // Process name (debugging)
   int nmapped_regions;         // number of regions we have mmapped
   mmapped_region *mmapped_header;// header of mapped regions
+  mmapped_region *unmapped_header;//header of all unmapped regions
 };
 
 // Process memory is laid out contiguously, low addresses first:
