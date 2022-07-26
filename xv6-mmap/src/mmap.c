@@ -169,7 +169,7 @@ void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
     mmapped_region* prev = NULL;
     int found_region = 0;
     while (curr && !found_region){
-      if(addr == curr->addr && curr->length > length)
+      if((addr == curr->addr || (uint)addr  == 0) && curr->length > length)
       {
         curr->length = length;
         curr->offset = offset;
