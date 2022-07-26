@@ -9,7 +9,7 @@
 
 #define NULL (mmapped_region*)0
 
-mmapped_region* create_header(uint pgaligned_addr, int length, int offset)
+mmapped_region* create_region(uint pgaligned_addr, int length, int offset)
 {
   // Allocate using kmalloc to not waste memory
     mmapped_region* region = (mmapped_region*)kmalloc(sizeof(mmapped_region));
@@ -25,7 +25,7 @@ mmapped_region* create_header(uint pgaligned_addr, int length, int offset)
     return region;
 }
 
-mmapped_region* insert_into_list(mmapped_region* header, mmapped_region* region)
+mmapped_region* insert_into_list(mmapped_region* header, mmapped_region* region, int expand)
 {
   //This function inserts into a linked list at the sorted location
   if(!header)
@@ -37,15 +37,40 @@ mmapped_region* insert_into_list(mmapped_region* header, mmapped_region* region)
     {
       if(curr->addr > region->addr)
       {
+        //found location
         if(!prev)
+        {
           header = region;
+          region->next = curr;
+        }
         else
-          prev->next = region;
-        region->next = curr;
+        {
+          if(expand && (uint)curr->addr == (uint)region->addr + region->length)
+          {
+            region->length += curr->length;
+            region->next = curr->next;
+            prev->next = curr->next;
+            kmfree(curr);
+          }
+          if(expand && (uint)prev->addr + prev->length == (uint)region->addr)
+          {
+            prev->length += region->length;
+            kmfree(region);
+          }else
+          {
+            prev->next = region;
+            region->next = curr;
+          }
+        }
         curr = NULL;
       }else if(!curr->next)
       {
-        curr->next = region;
+        if(expand && (uint)curr->addr + curr->length == (uint)region->addr)
+        {
+            curr->length += region->length;
+            kmfree(region);
+        }else
+          curr->next = region;
         curr = NULL;
       }else{
         prev = curr;
@@ -117,6 +142,18 @@ void print_umaps() {
   cprintf("==================================================\n");
 }
 
+mmapped_region* create_and_expand(uint length, int offset)
+{
+  struct proc *p = myproc();
+  uint orig_sz = p->sz;
+  uint pgaligned_addr = PGROUNDUP(orig_sz);
+  p->sz = allocuvm(p->pgdir, orig_sz,  pgaligned_addr + length);
+  if (p->sz == 0)
+    return (void*)-1;
+  switchuvm(p);
+  return create_region(pgaligned_addr, length, offset);
+}
+
 void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
 {
   if ((uint)addr >= KERNBASE || length <= 0)
@@ -124,13 +161,7 @@ void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
   struct proc *p = myproc();
 
   if (!p->mmapped_header && !p->unmapped_header){
-    uint orig_sz = p->sz;
-    uint pgaligned_addr = PGROUNDUP(orig_sz);
-    p->sz = allocuvm(p->pgdir, orig_sz,  pgaligned_addr + length);
-    if (p->sz == 0)
-      return (void*)-1;
-    switchuvm(p);
-    p->mmapped_header = create_header((uint)pgaligned_addr, length, offset);
+    p->mmapped_header = create_and_expand(length, offset);
     addr = p->mmapped_header->addr;
   }else {
     addr = (void*)PGROUNDUP((uint)addr);
@@ -148,7 +179,7 @@ void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
         {
           void* new_addr = (void*)PGROUNDUP((uint)curr->addr + length);
           uint old_boundary = PGROUNDUP((uint)curr->addr + curr->length);
-          mmapped_region* new_subregion = create_header((uint)new_addr, (old_boundary - (uint)new_addr), offset);
+          mmapped_region* new_subregion = create_region((uint)new_addr, (old_boundary - (uint)new_addr), offset);
           if(!prev)
             p->unmapped_header = new_subregion;
           else{
@@ -160,8 +191,26 @@ void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
         else{
           prev->next = curr->next;
         }
-        p->mmapped_header = insert_into_list(p->mmapped_header, curr);
+        p->mmapped_header = insert_into_list(p->mmapped_header, curr, 0);
         addr = curr->addr;
+        found_region = 1;
+      }else if(addr > curr->addr && (uint)addr < (uint)curr->addr + curr->length)
+      {
+        //Found inside a segment
+        uint new_end_addr = PGROUNDUP((uint)addr + length);
+        uint new_end_length = (uint)curr->addr + curr->length - (uint)addr;
+        mmapped_region* new_subregion_end = NULL;
+        if(new_end_addr < (uint)curr->addr)
+        {
+          new_subregion_end = create_region(new_end_addr, new_end_length, offset);
+          new_subregion_end->next = curr->next;
+        }
+        curr->length = (uint)addr - (uint)curr->addr;
+        mmapped_region* new_subregion = create_region((uint)addr, length, offset);
+        
+        curr->next = new_subregion_end;
+        p->mmapped_header = insert_into_list(p->mmapped_header, new_subregion, 0);
+        addr = new_subregion->addr;
         found_region = 1;
       }
       prev = curr;
@@ -169,14 +218,8 @@ void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
     }
     if(!found_region)
     {
-      uint orig_sz = p->sz;
-      uint pgaligned_addr = PGROUNDUP(orig_sz);
-      p->sz = allocuvm(p->pgdir, orig_sz,  pgaligned_addr + length);
-      if (p->sz == 0)
-        return (void*)-1;
-      switchuvm(p);
-      mmapped_region* new_region = create_header(pgaligned_addr, length, offset);
-      p->mmapped_header = insert_into_list(p->mmapped_header, new_region);
+      mmapped_region* new_region = create_and_expand(length, offset);
+      p->mmapped_header = insert_into_list(p->mmapped_header, new_region, 0);
       addr = new_region->addr;
     }
   }
@@ -209,7 +252,7 @@ int munmap(void *addr, uint length)
       }else{
         prev->next = curr->next;
       }
-      p->unmapped_header = insert_into_list(p->unmapped_header, curr);
+      p->unmapped_header = insert_into_list(p->unmapped_header, curr, 1);
       switchuvm(p);
       return 0;
     }
