@@ -57,7 +57,7 @@ kmorecore()
 void*
 kmalloc(uint nbytes)
 {
-  if(nbytes > PGSIZE)
+  if(nbytes > PGSIZE - sizeof(KNode))
   {
     panic("kmalloc: more than 4096 requested");
   }

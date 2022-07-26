@@ -164,7 +164,11 @@ void *mmap(void *addr, uint length, int prot, int flags, int fd, int offset)
     p->mmapped_header = create_and_expand(length, offset);
     addr = p->mmapped_header->addr;
   }else {
-    addr = (void*)PGROUNDUP((uint)addr);
+    void* middleAddr = (void*)PGROUNDUP((uint)addr) - PGSIZE/2;
+    if(addr < middleAddr)
+      addr = (void*)PGROUNDDOWN((uint)addr);
+    else
+      addr = (void*)PGROUNDUP((uint)addr);
     mmapped_region* curr = p->unmapped_header;
     mmapped_region* prev = NULL;
     int found_region = 0;
